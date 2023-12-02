@@ -37,6 +37,7 @@
         #chat>* {
             margin: 0;
             padding: 5;
+            color: green;
         }
 
         #chat> :nth-child(even) {
@@ -51,7 +52,7 @@
 
 <body>
     <h1>Neel's Chat Room</h1>
-    <div style="overflow-y: auto; height: 80%;" hx-get="/messages" hx-trigger="load, every 2s" hx-swap="innerHTML"
+    <div style="overflow-y: auto; height: 80%;" hx-get="/messages" hx-trigger="load, every 1s" hx-swap="innerHTML"
         id="chat"></div>
     <form hx-put="/send" hx-target="#chat" hx-swap="beforeend"
         hx-on::after-request=" if(event.detail.successful) this.reset()">

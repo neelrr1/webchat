@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const PORT = "8080"
+const PORT = "80"
 const MAX_MESSAGE_LEN = 2000
 
 var messagesLock sync.RWMutex
