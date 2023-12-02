@@ -4,22 +4,19 @@
     <script src="static/htmx.min.js"></script>
     <!-- setInterval function to get nicer scrolling behavior on chat div when it overflows -->
     <!-- Taken from: https://stackoverflow.com/a/21067431 -->
-    <!-- FIXME: This doesn't work :( -->
     <script>
+        var isScrolledToBottom = true;
         function updateChatScroll() {
-            console.log("Called!")
             const chat = document.getElementById("chat")
-            const isScrolledToBottom = chat.scrollHeight - chat.clientHeight <= chat.scrollTop + 1
 
             if (isScrolledToBottom) {
-                console.log(isScrolledToBottom)
                 chat.scrollTop = chat.scrollHeight - chat.clientHeight
             }
         }
 
         document.addEventListener("htmx:beforeRequest", function (e) {
             if (e.detail.target.id == "chat") {
-                updateChatScroll();
+                isScrolledToBottom = chat.scrollHeight - chat.clientHeight <= chat.scrollTop + 1;
             }
         });
 
@@ -33,10 +30,8 @@
 
 <body>
     <h1>Neel's Chat Room</h1>
-    <!-- <div style="overflow-y: auto; height: 80%;" hx-get="/messages" hx-trigger="load, every 2s" hx-swap="innerHTML"
-        id="chat"></div> -->
-    <div style="overflow-y: auto; height: 80%;" hx-get="/messages" hx-trigger="load" hx-swap="innerHTML" id="chat">
-    </div>
+    <div style="overflow-y: auto; height: 80%;" hx-get="/messages" hx-trigger="load, every 2s" hx-swap="innerHTML"
+        id="chat"></div>
     <form hx-put="/send" hx-target="#chat" hx-swap="beforeend"
         hx-on::after-request=" if(event.detail.successful) this.reset()">
         <input id="message" name="message" type="text" autofocus></input>
