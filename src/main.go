@@ -22,8 +22,9 @@ var chattersLock sync.RWMutex
 var chatters = map[string]Chatter{}
 
 type Chatter struct {
-	ip   string
-	name string
+	ip    string
+	name  string
+	color string
 }
 
 func logRequest(r *http.Request) {
@@ -81,22 +82,20 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received %s\n", message)
 
 	chattersLock.Lock()
-	defer chattersLock.Unlock()
 	chatter, exists := chatters[r.RemoteAddr]
 
 	if !exists {
-		chatter = Chatter{r.RemoteAddr, r.RemoteAddr}
+		chatter = Chatter{r.RemoteAddr, r.RemoteAddr, "green"}
 		chatters[r.RemoteAddr] = chatter
 	}
-
-	fmt.Println(chatter)
+	chattersLock.Unlock()
 
 	if message[0] == '/' {
-		handleSlash(message, &chatter)
+		handleSlash(message, chatter)
 		return
 	}
 
-	message = fmt.Sprintf("<p>[%s] %s: %s</p>", time.Format("2006-01-02 15:04:05"), chatter.name, template.HTMLEscapeString(message))
+	message = fmt.Sprintf(`<p style="color: %s;">[%s] %s: %s</p>`, chatter.color, time.Format("2006-01-02 15:04:05"), chatter.name, template.HTMLEscapeString(message))
 
 	messagesLock.Lock()
 	messages = append(messages, message)
@@ -105,12 +104,15 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, message)
 }
 
-func handleSlash(message string, c *Chatter) {
+func handleSlash(message string, c Chatter) {
 	if message == "/wipe" || message == "/clear" {
 		messages = messages[:1]
 	} else if message[:5] == "/nick" {
-		fmt.Println(message, message[:5], message[5:])
-		chatters[c.ip] = Chatter{c.ip, message[5:]}
+		c.name = message[5:]
+		chatters[c.ip] = c
+	} else if message[:6] == "/color" {
+		c.color = template.HTMLEscapeString(message[6:])
+		chatters[c.ip] = c
 	}
 }
 
