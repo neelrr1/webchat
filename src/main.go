@@ -18,6 +18,14 @@ const MAX_MESSAGE_LEN = 2000
 var messagesLock sync.RWMutex
 var messages = []string{"<p>[SYSTEM] Welcome to my chat room!</p>"}
 
+var chattersLock sync.RWMutex
+var chatters = map[string]Chatter{}
+
+type Chatter struct {
+	ip   string
+	name string
+}
+
 func logRequest(r *http.Request) {
 	log.Printf("INFO: %s %s - %s", r.Method, r.URL.Path, r.RemoteAddr)
 }
@@ -71,13 +79,39 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 		message = message[:MAX_MESSAGE_LEN]
 	}
 	log.Printf("Received %s\n", message)
-	message = fmt.Sprintf("<p>[%s] %s: %s</p>", time.Format("2006-01-02 15:04:05"), r.RemoteAddr, template.HTMLEscapeString(message))
+
+	chattersLock.Lock()
+	defer chattersLock.Unlock()
+	chatter, exists := chatters[r.RemoteAddr]
+
+	if !exists {
+		chatter = Chatter{r.RemoteAddr, r.RemoteAddr}
+		chatters[r.RemoteAddr] = chatter
+	}
+
+	fmt.Println(chatter)
+
+	if message[0] == '/' {
+		handleSlash(message, &chatter)
+		return
+	}
+
+	message = fmt.Sprintf("<p>[%s] %s: %s</p>", time.Format("2006-01-02 15:04:05"), chatter.name, template.HTMLEscapeString(message))
 
 	messagesLock.Lock()
 	messages = append(messages, message)
 	messagesLock.Unlock()
 
 	fmt.Fprint(w, message)
+}
+
+func handleSlash(message string, c *Chatter) {
+	if message == "/wipe" || message == "/clear" {
+		messages = messages[:1]
+	} else if message[:5] == "/nick" {
+		fmt.Println(message, message[:5], message[5:])
+		chatters[c.ip] = Chatter{c.ip, message[5:]}
+	}
 }
 
 func handleIndex(w http.ResponseWriter, r *http.Request) {
