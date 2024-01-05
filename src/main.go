@@ -27,9 +27,18 @@ type Chatter struct {
 	color string
 }
 
+func getClientIp(r *http.Request) string {
+	cf_ip := r.Header.Get("CF-Connecting-IP")
+	if len(cf_ip) > 0 {
+		return cf_ip
+	}
+
+	return r.RemoteAddr
+}
+
 // "Middleware" functions
 func logRequest(r *http.Request) {
-	log.Printf("INFO: %s %s - %s", r.Method, r.URL.Path, r.RemoteAddr)
+	log.Printf("INFO: %s %s - %s", r.Method, r.URL.Path, getClientIp(r))
 }
 
 func setCorsHeaders(w http.ResponseWriter, r *http.Request) {
@@ -105,11 +114,11 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Received %s\n", message)
 
 	chattersLock.Lock()
-	chatter, exists := chatters[r.RemoteAddr]
+	chatter, exists := chatters[getClientIp(r)]
 
 	if !exists {
-		chatter = Chatter{r.RemoteAddr, r.RemoteAddr, "green"}
-		chatters[r.RemoteAddr] = chatter
+		chatter = Chatter{getClientIp(r), getClientIp(r), "green"}
+		chatters[getClientIp(r)] = chatter
 	}
 	chattersLock.Unlock()
 
@@ -131,7 +140,7 @@ func handleSlash(message string, c Chatter) {
 	if message == "/wipe" || message == "/clear" {
 		messages = messages[:1]
 	} else if message[:5] == "/nick" {
-		c.name = message[5:]
+		c.name = template.HTMLEscapeString(message[5:])
 		chatters[c.ip] = c
 	} else if message[:6] == "/color" {
 		c.color = template.HTMLEscapeString(message[6:])
