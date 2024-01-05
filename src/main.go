@@ -63,8 +63,7 @@ func handleRoute(pattern string, handler func(http.ResponseWriter, *http.Request
 }
 
 // TODO: Explore not using a polling architecture for messages
-// TODO: Can we persist messages or give them a TTL with Redis or something!
-// FIXME: Since we are proxy-ing requests through Cloudflare, use the CF-Connecting-IP header to get user IPs
+// TODO: Can we persist messages or give them a TTL with Redis or something! + Docker Compose?!
 func main() {
 	http.HandleFunc("/static/", handleStatic)
 	http.HandleFunc("/", handleIndex)
