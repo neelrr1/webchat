@@ -45,35 +45,62 @@ func setCorsHeaders(w http.ResponseWriter, r *http.Request) {
 	origin := r.Header.Get("Origin")
 	headers := w.Header()
 	headers.Add("Access-Control-Allow-Origin", origin)
-	headers.Add("Access-Control-Allow-Headers", "Accept, Accept-Language, Content-Language, Content-Type, hx-target, hx-current-url, hx-trigger, hx-request")
+	headers.Add("Access-Control-Allow-Headers", "Accept, Accept-Language, Content-Language, Connection, Content-Type, Cache-Control, hx-target, hx-current-url, hx-trigger, hx-request")
 	headers.Add("Access-Control-Allow-Methods", "*")
-	w.WriteHeader(http.StatusOK)
+}
+
+type Header struct {
+	key   string
+	value string
 }
 
 // Wrapper function to execute custom "middleware"
-func handleRoute(pattern string, handler func(http.ResponseWriter, *http.Request)) {
+func handleRoute(pattern string, handler func(http.ResponseWriter, *http.Request), headers []Header) {
 	http.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		logRequest(r)
 
 		setCorsHeaders(w, r)
+		for _, header := range headers {
+			w.Header().Add(header.key, header.value)
+		}
+		w.WriteHeader(http.StatusOK)
 		if r.Method != "OPTIONS" {
 			handler(w, r)
 		}
 	})
 }
 
-// TODO: Explore not using a polling architecture for messages
 // TODO: Can we persist messages or give them a TTL with Redis or something! + Docker Compose?!
 func main() {
 	http.HandleFunc("/static/", handleStatic)
 	http.HandleFunc("/", handleIndex)
 
 	// These handlers need middleware
-	handleRoute("/send", handleSend)
-	handleRoute("/messages", handleMessages)
+	handleRoute("/send", handleSend, nil)
+	handleRoute("/messages", handleMessages, nil)
+	handleRoute("/subscribe", handleSubscribe, []Header{{"Content-Type", "text/event-stream"}, {"Cache-Control", "no-store"}, {"Connection", "keep-alive"}})
 
 	fmt.Printf("Listening on port %s...\n", PORT)
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", PORT), nil))
+}
+
+func handleSubscribe(w http.ResponseWriter, r *http.Request) {
+	rc := http.NewResponseController(w)
+
+	for {
+		// TODO: Determine whether to push an update to subscribed clients - sync Cond?
+		formattedData := strings.ReplaceAll(strings.Join(messages, ""), "\n", " ")
+		fmt.Fprintf(w, "data: %s\n\n", formattedData)
+
+		err := rc.Flush()
+		if err != nil {
+			log.Println("Unable to flush http data!")
+			return
+		}
+
+		// FIXME: Take out this unconditional sleep
+		time.Sleep(1 * time.Second)
+	}
 }
 
 func handleMessages(w http.ResponseWriter, r *http.Request) {
