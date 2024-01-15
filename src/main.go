@@ -57,7 +57,7 @@ type Header struct {
 }
 
 // Wrapper function to execute custom "middleware"
-func handleRoute(pattern string, handler func(http.ResponseWriter, *http.Request), headers []Header) {
+func handleRoute(pattern string, handler func(http.ResponseWriter, *http.Request, *int), headers []Header) {
 	http.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		logRequest(r)
 
@@ -65,14 +65,16 @@ func handleRoute(pattern string, handler func(http.ResponseWriter, *http.Request
 		for _, header := range headers {
 			w.Header().Add(header.key, header.value)
 		}
-		w.WriteHeader(http.StatusOK)
+
+		status := http.StatusOK
 		if r.Method != "OPTIONS" {
-			handler(w, r)
+			handler(w, r, &status)
 		}
+		w.WriteHeader(status)
 	})
 }
 
-// TODO: Can we persist messages or give them a TTL with Redis or something! + Docker Compose?!
+// TODO: Can we persist messages with Redis?! + implement connection pooling!
 func main() {
 	http.HandleFunc("/static/", handleStatic)
 	http.HandleFunc("/", handleIndex)
@@ -86,7 +88,7 @@ func main() {
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", PORT), nil))
 }
 
-func handleSubscribe(w http.ResponseWriter, r *http.Request) {
+func handleSubscribe(w http.ResponseWriter, r *http.Request, status *int) {
 	rc := http.NewResponseController(w)
 
 	newMessage.L.Lock()
@@ -110,7 +112,7 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	newMessage.L.Unlock()
 }
 
-func handleMessages(w http.ResponseWriter, r *http.Request) {
+func handleMessages(w http.ResponseWriter, r *http.Request, status *int) {
 	// Avoid holding locks across IO calls
 	messagesLock.RLock()
 	out := strings.Join(messages, "")
@@ -119,8 +121,9 @@ func handleMessages(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, out)
 }
 
-func handleSend(w http.ResponseWriter, r *http.Request) {
+func handleSend(w http.ResponseWriter, r *http.Request, status *int) {
 	time := time.Now()
+	*status = http.StatusNoContent
 
 	bytes, err := ioutil.ReadAll(r.Body)
 	if err != nil {

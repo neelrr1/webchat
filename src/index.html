@@ -70,8 +70,7 @@
     <div style="overflow-y: auto; height: 80%;" hx-get="/messages" hx-trigger="load" hx-swap="innerHTML" id="chat"
         hx-ext="sse" sse-connect="/subscribe" sse-swap="message">
     </div>
-    <form hx-put="/send" hx-target="#chat" hx-swap="beforeend"
-        hx-on::after-request=" if(event.detail.successful) this.reset()">
+    <form hx-put="/send" hx-on::after-request=" if(event.detail.successful) this.reset()">
         <input id="message" name="message" type="text" autofocus></input>
         <button type="submit">Send Message</button>
     </form>
