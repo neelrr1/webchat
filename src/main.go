@@ -18,6 +18,8 @@ const MAX_MESSAGE_LEN = 2000
 var messagesLock sync.RWMutex
 var messages = []string{"<p>[SYSTEM] Welcome to my chat room!</p>"}
 
+var newMessage = sync.NewCond(&messagesLock)
+
 var chattersLock sync.RWMutex
 var chatters = map[string]Chatter{}
 
@@ -87,9 +89,12 @@ func main() {
 func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	rc := http.NewResponseController(w)
 
+	newMessage.L.Lock()
 	for {
-		// TODO: Determine whether to push an update to subscribed clients - sync Cond?
+		// Avoid holding locks across IO calls
 		formattedData := strings.ReplaceAll(strings.Join(messages, ""), "\n", " ")
+		newMessage.L.Unlock()
+
 		fmt.Fprintf(w, "data: %s\n\n", formattedData)
 
 		err := rc.Flush()
@@ -98,16 +103,20 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// FIXME: Take out this unconditional sleep
-		time.Sleep(1 * time.Second)
+		newMessage.L.Lock()
+		newMessage.Wait()
 	}
+
+	newMessage.L.Unlock()
 }
 
 func handleMessages(w http.ResponseWriter, r *http.Request) {
+	// Avoid holding locks across IO calls
 	messagesLock.RLock()
-	defer messagesLock.RUnlock()
+	out := strings.Join(messages, "")
+	messagesLock.RUnlock()
 
-	fmt.Fprint(w, strings.Join(messages, ""))
+	fmt.Fprint(w, out)
 }
 
 func handleSend(w http.ResponseWriter, r *http.Request) {
@@ -137,7 +146,7 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 	if len(message) > MAX_MESSAGE_LEN {
 		message = message[:MAX_MESSAGE_LEN]
 	}
-	log.Printf("Received %s\n", message)
+	log.Printf("Received \"%s\"\n", message)
 
 	chattersLock.Lock()
 	chatter, exists := chatters[getClientIp(r)]
@@ -149,7 +158,9 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 	chattersLock.Unlock()
 
 	if message[0] == '/' {
+		messagesLock.Lock()
 		handleSlash(message, chatter)
+		messagesLock.Unlock()
 		return
 	}
 
@@ -157,14 +168,14 @@ func handleSend(w http.ResponseWriter, r *http.Request) {
 
 	messagesLock.Lock()
 	messages = append(messages, message)
+	newMessage.Broadcast()
 	messagesLock.Unlock()
-
-	fmt.Fprint(w, message)
 }
 
 func handleSlash(message string, c Chatter) {
 	if message == "/wipe" || message == "/clear" {
 		messages = messages[:1]
+		newMessage.Broadcast()
 	} else if message[:5] == "/nick" {
 		c.name = template.HTMLEscapeString(message[5:])
 		chatters[c.ip] = c
