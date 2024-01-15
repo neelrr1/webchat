@@ -57,7 +57,7 @@ type Header struct {
 }
 
 // Wrapper function to execute custom "middleware"
-func handleRoute(pattern string, handler func(http.ResponseWriter, *http.Request, *int), headers []Header) {
+func handleRoute(pattern string, handler func(http.ResponseWriter, *http.Request), headers []Header) {
 	http.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
 		logRequest(r)
 
@@ -66,11 +66,11 @@ func handleRoute(pattern string, handler func(http.ResponseWriter, *http.Request
 			w.Header().Add(header.key, header.value)
 		}
 
-		status := http.StatusOK
-		if r.Method != "OPTIONS" {
-			handler(w, r, &status)
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
 		}
-		w.WriteHeader(status)
+		handler(w, r)
 	})
 }
 
@@ -88,7 +88,7 @@ func main() {
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%s", PORT), nil))
 }
 
-func handleSubscribe(w http.ResponseWriter, r *http.Request, status *int) {
+func handleSubscribe(w http.ResponseWriter, r *http.Request) {
 	rc := http.NewResponseController(w)
 
 	newMessage.L.Lock()
@@ -112,7 +112,7 @@ func handleSubscribe(w http.ResponseWriter, r *http.Request, status *int) {
 	newMessage.L.Unlock()
 }
 
-func handleMessages(w http.ResponseWriter, r *http.Request, status *int) {
+func handleMessages(w http.ResponseWriter, r *http.Request) {
 	// Avoid holding locks across IO calls
 	messagesLock.RLock()
 	out := strings.Join(messages, "")
@@ -121,9 +121,9 @@ func handleMessages(w http.ResponseWriter, r *http.Request, status *int) {
 	fmt.Fprint(w, out)
 }
 
-func handleSend(w http.ResponseWriter, r *http.Request, status *int) {
+func handleSend(w http.ResponseWriter, r *http.Request) {
 	time := time.Now()
-	*status = http.StatusNoContent
+	w.WriteHeader(http.StatusNoContent)
 
 	bytes, err := ioutil.ReadAll(r.Body)
 	if err != nil {
